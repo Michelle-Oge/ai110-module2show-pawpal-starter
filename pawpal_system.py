@@ -1,21 +1,24 @@
 from __future__ import annotations
 from dataclasses import dataclass, field
+from datetime import date, timedelta
 from typing import Any
 
 
 @dataclass
 class Task:
-    """Represents a single pet-care activity with a duration, priority, and completion state."""
 
     name: str
-    duration: int
-    priority: int
+    duration: int                       # minutes
+    priority: int                       # 1 (low) – 5 (high)
     category: str = "general"
     notes: str = ""
     completed: bool = False
+    time_slot: str = ""                 # "HH:MM" – when the task is scheduled
+    frequency: str = "once"            # "once" | "daily" | "weekly"
+    due_date: date = field(default_factory=date.today)
 
     def is_valid(self) -> bool:
-        """Return True if name is non-empty, duration is positive, and priority is 1–5."""
+  
         if not self.name or not self.name.strip():
             return False
         if self.duration <= 0:
@@ -24,22 +27,47 @@ class Task:
             return False
         return True
 
-    def mark_complete(self) -> None:
-        """Mark this task as completed."""
+    def mark_complete(self) -> "Task | None":
+       
         self.completed = True
 
+        if self.frequency == "daily":
+            return Task(
+                name=self.name,
+                duration=self.duration,
+                priority=self.priority,
+                category=self.category,
+                notes=self.notes,
+                time_slot=self.time_slot,
+                frequency=self.frequency,
+                due_date=self.due_date + timedelta(days=1),
+            )
+        if self.frequency == "weekly":
+            return Task(
+                name=self.name,
+                duration=self.duration,
+                priority=self.priority,
+                category=self.category,
+                notes=self.notes,
+                time_slot=self.time_slot,
+                frequency=self.frequency,
+                due_date=self.due_date + timedelta(weeks=1),
+            )
+        return None     # "once" — no follow-up task needed
+
     def __repr__(self) -> str:
-        """Return a concise string showing completion status, name, duration, and category."""
+       
         status = "✓" if self.completed else "○"
+        slot   = f" @{self.time_slot}" if self.time_slot else ""
         return (
-            f"[{status}] {self.name} ({self.duration} min, "
-            f"p{self.priority}, {self.category})"
+            f"[{status}] {self.name}{slot} ({self.duration} min, "
+            f"p{self.priority}, {self.frequency})"
         )
+
 
 
 @dataclass
 class Pet:
-    """Stores pet profile information and owns the list of care tasks for that pet."""
 
     name: str
     species: str
@@ -48,7 +76,7 @@ class Pet:
     tasks: list[Task] = field(default_factory=list)
 
     def add_task(self, task: Task) -> None:
-        """Validate task and append it to this pet's task list, raising ValueError if invalid."""
+        
         if not task.is_valid():
             raise ValueError(
                 f"Invalid task {task!r}: check name, duration (>0), "
@@ -57,7 +85,7 @@ class Pet:
         self.tasks.append(task)
 
     def remove_task(self, name: str) -> bool:
-        """Remove the first task matching the given name; return True if found, False otherwise."""
+       
         for i, t in enumerate(self.tasks):
             if t.name == name:
                 self.tasks.pop(i)
@@ -65,17 +93,17 @@ class Pet:
         return False
 
     def get_pending_tasks(self) -> list[Task]:
-        """Return only tasks that have not yet been marked complete."""
+       
         return [t for t in self.tasks if not t.completed]
 
     def __repr__(self) -> str:
-        """Return a concise string with the pet's name, species, and age."""
+        
         return f"Pet({self.name!r}, {self.species}, age {self.age})"
+
 
 
 @dataclass
 class Owner:
-    """Manages an owner's profile, time budget, and the collection of their pets."""
 
     name: str
     available_minutes: int
@@ -83,11 +111,9 @@ class Owner:
     pets: list[Pet] = field(default_factory=list)
 
     def add_pet(self, pet: Pet) -> None:
-        """Register a new pet with this owner."""
         self.pets.append(pet)
 
     def remove_pet(self, name: str) -> bool:
-        """Remove the first pet matching the given name; return True if found, False otherwise."""
         for i, p in enumerate(self.pets):
             if p.name == name:
                 self.pets.pop(i)
@@ -95,11 +121,11 @@ class Owner:
         return False
 
     def get_all_tasks(self) -> list[tuple[Pet, Task]]:
-        """Return every (pet, task) pair across all registered pets."""
+
         return [(pet, task) for pet in self.pets for task in pet.tasks]
 
     def get_all_pending_tasks(self) -> list[tuple[Pet, Task]]:
-        """Return only (pet, task) pairs where the task is not yet completed."""
+ 
         return [
             (pet, task)
             for pet in self.pets
@@ -107,23 +133,23 @@ class Owner:
         ]
 
     def __repr__(self) -> str:
-        """Return a summary string with name, available minutes, and pet count."""
+  
         return (
             f"Owner({self.name!r}, {self.available_minutes} min available, "
             f"{len(self.pets)} pet(s))"
         )
 
 
+
 @dataclass
 class Plan:
-    """Holds the output of one scheduling run: scheduled tasks, skipped tasks, and total time used."""
 
     scheduled: list[tuple[Pet, Task]] = field(default_factory=list)
     skipped:   list[tuple[Pet, Task]] = field(default_factory=list)
     total_minutes: int = 0
 
     def summary(self) -> str:
-        """Return a one-line string summarising how many tasks were scheduled vs skipped."""
+
         return (
             f"{len(self.scheduled)} task(s) scheduled "
             f"({self.total_minutes} min); "
@@ -131,7 +157,7 @@ class Plan:
         )
 
     def reasoning(self) -> str:
-        """Return a multi-line explanation of which tasks were scheduled or skipped and why."""
+       
         lines = [
             "Tasks were sorted by priority (highest first).",
             "Ties broken by shorter duration first.",
@@ -140,8 +166,9 @@ class Plan:
         if self.scheduled:
             lines.append("Scheduled:")
             for pet, task in self.scheduled:
+                slot = f" @{task.time_slot}" if task.time_slot else ""
                 lines.append(
-                    f"  ✓ [{pet.name}] {task.name} "
+                    f"  ✓ [{pet.name}] {task.name}{slot} "
                     f"— priority {task.priority}, {task.duration} min"
                 )
         if self.skipped:
@@ -154,7 +181,7 @@ class Plan:
         return "\n".join(lines)
 
     def to_dict(self) -> dict:
-        """Serialise the plan to a plain dict suitable for JSON export or Streamlit display."""
+    
         return {
             "scheduled": [
                 {
@@ -163,6 +190,7 @@ class Plan:
                     "duration": task.duration,
                     "priority": task.priority,
                     "category": task.category,
+                    "time_slot": task.time_slot,
                     "notes": task.notes,
                 }
                 for pet, task in self.scheduled
@@ -177,16 +205,83 @@ class Plan:
         }
 
 
+
 class Scheduler:
-    """Retrieves tasks from the Owner's pets, sorts them by priority, and produces a Plan."""
 
     def __init__(self, owner: Owner) -> None:
-        """Initialise the scheduler with a reference to the Owner whose pets will be scheduled."""
+        
         self.owner = owner
 
+
+    def sort_by_time(self, tasks: list[Task]) -> list[Task]:
+        
+        return sorted(
+            tasks,
+            key=lambda t: ("1", "") if not t.time_slot else ("0", t.time_slot),
+        )
+
+
+    def filter_tasks(
+        self,
+        *,
+        completed: bool | None = None,
+        pet_name: str | None = None,
+    ) -> list[tuple[Pet, Task]]:
+       
+        results = self.owner.get_all_tasks()
+
+        if completed is not None:
+            results = [(p, t) for p, t in results if t.completed == completed]
+
+        if pet_name is not None:
+            results = [(p, t) for p, t in results
+                       if p.name.lower() == pet_name.lower()]
+
+        return results
+
+
+    def mark_task_complete(self, pet_name: str, task_name: str) -> bool:
+    
+        for pet in self.owner.pets:
+            if pet.name == pet_name:
+                for task in pet.tasks:
+                    if task.name == task_name:
+                        next_task = task.mark_complete()   # may return a new Task
+                        if next_task is not None:
+                            pet.add_task(next_task)        # auto-schedule recurrence
+                        return True
+        return False
+
+    # ── conflict detection ────────────────────────────────────────────────────
+
+    def detect_conflicts(self) -> list[str]:
+       
+        warnings: list[str] = []
+        all_tasks = self.owner.get_all_tasks()   # [(pet, task), ...]
+
+        # Compare every pair once (i < j avoids double-reporting)
+        for i in range(len(all_tasks)):
+            for j in range(i + 1, len(all_tasks)):
+                pet_a, task_a = all_tasks[i]
+                pet_b, task_b = all_tasks[j]
+
+                if (
+                    task_a.time_slot
+                    and task_b.time_slot
+                    and task_a.time_slot == task_b.time_slot
+                ):
+                    warnings.append(
+                        f"⚠ Conflict at {task_a.time_slot}: "
+                        f"[{pet_a.name}] {task_a.name} "
+                        f"vs [{pet_b.name}] {task_b.name}"
+                    )
+
+        return warnings
+
+
     def generate_plan(self) -> Plan:
-        """Sort all pending tasks by priority (desc) then duration (asc) and greedily fit them into the owner's time budget."""
-        budget = self.owner.available_minutes
+        
+        budget  = self.owner.available_minutes
         pending = self.owner.get_all_pending_tasks()
 
         sorted_pairs = sorted(
@@ -208,7 +303,7 @@ class Scheduler:
         return Plan(scheduled=scheduled, skipped=skipped, total_minutes=used)
 
     def explain_plan(self, plan: Plan) -> str:
-        """Return a formatted plain-English explanation of the given plan, including a header and reasoning."""
+       
         header = (
             f"Plan for {self.owner.name} "
             f"({self.owner.available_minutes} min available today)\n"
@@ -216,16 +311,6 @@ class Scheduler:
         )
         return f"{header}\n{plan.reasoning()}\n\n{plan.summary()}"
 
-    def mark_task_complete(self, pet_name: str, task_name: str) -> bool:
-        """Find the named task on the named pet and mark it complete; return True if found."""
-        for pet in self.owner.pets:
-            if pet.name == pet_name:
-                for task in pet.tasks:
-                    if task.name == task_name:
-                        task.mark_complete()
-                        return True
-        return False
-
     def get_all_tasks_grouped(self) -> dict[str, list[Task]]:
-        """Return a dict mapping each pet's name to its full task list."""
+        
         return {pet.name: pet.tasks for pet in self.owner.pets}
